@@ -1,0 +1,9 @@
+{
+  "name": "Copy of Olpar360",
+  "description": "Base de datos viva del universo de clientes. Precisión absoluta y caracterización integral 360°.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone",
+    "camera"
+  ]
+}
