@@ -10,12 +10,38 @@ interface DatabaseViewProps {
     auditorNameFilter?: string;
 }
 
+const resizeImage = (base64Str: string, maxWidth = 800): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth) {
+                height *= maxWidth / width;
+                width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+    });
+};
+
+
 export const DatabaseView: React.FC<DatabaseViewProps> = ({ currentUserId, auditorNameFilter }) => {
     const [records, setRecords] = useState<Geo360Record[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'records' | 'users'>('records');
+
+    const facadeEditInputRef = useRef<HTMLInputElement>(null);
+    const interiorEditInputRef = useRef<HTMLInputElement>(null);
+
 
     // Modal States
     const [editingRecord, setEditingRecord] = useState<Geo360Record | null>(null);
@@ -72,6 +98,34 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ currentUserId, audit
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleEditPhotoUpload = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+        type: 'facade' | 'interior'
+    ) => {
+        const file = e.target.files?.[0];
+        if (!file || !editingRecord) return;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const optimized = await resizeImage(reader.result as string);
+
+            setEditingRecord(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    images: {
+                        ...(prev.images || { facade: null, interior: null }),
+                        [type]: optimized
+                    }
+                };
+            });
+
+            e.target.value = '';
+        };
+
+        reader.readAsDataURL(file);
     };
 
     const handleEditMarkerDrag = (index: number, lat: number, lng: number) => {
@@ -232,11 +286,29 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ currentUserId, audit
                                                 <div className="text-[10px] text-slate-400 font-bold">{new Date(r.timestamp).toLocaleDateString()}</div>
                                             </td>
                                             <td className="px-6 py-10">
-                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border ${r.client_validation_status === 'verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-100 text-slate-400 border-slate-200'
-                                                    }`}>
-                                                    {r.client_validation_status === 'verified' ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                                                    {r.client_validation_status === 'verified' ? 'Verificado' : 'Pendiente'}
+                                                <div
+                                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border ${r.client_validation_status === 'verified'
+                                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                                            : r.client_validation_status === 'reported'
+                                                                ? 'bg-red-50 text-red-600 border-red-100'
+                                                                : 'bg-slate-100 text-slate-400 border-slate-200'
+                                                        }`}
+                                                >
+                                                    {r.client_validation_status === 'verified' ? (
+                                                        <CheckCircle className="h-3 w-3" />
+                                                    ) : r.client_validation_status === 'reported' ? (
+                                                        <AlertTriangle className="h-3 w-3" />
+                                                    ) : (
+                                                        <Clock className="h-3 w-3" />
+                                                    )}
+
+                                                    {r.client_validation_status === 'verified'
+                                                        ? 'Verificado'
+                                                        : r.client_validation_status === 'reported'
+                                                            ? 'Rechazado'
+                                                            : 'Pendiente'}
                                                 </div>
+
                                             </td>
                                             <td className="px-6 py-10">
                                                 <div className="font-black text-slate-900 text-sm md:text-base leading-tight mb-1">{r.client.contactName}</div>
@@ -395,6 +467,57 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ currentUserId, audit
                                         </>
                                     )}
                                 </div>
+                                {/* IMÁGENES */}
+                                {(viewingRecord.images?.facade || viewingRecord.images?.interior) && (
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2">
+                                            Evidencias Fotográficas
+                                        </h4>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Fachada */}
+                                            <div className="bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
+                                                <div className="p-4 flex items-center justify-between">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fachada</p>
+                                                </div>
+                                                <div className="aspect-[4/3] bg-slate-100">
+                                                    {viewingRecord.images?.facade ? (
+                                                        <img
+                                                            src={viewingRecord.images.facade}
+                                                            className="w-full h-full object-cover"
+                                                            alt="Foto fachada"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400">
+                                                            Sin imagen
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Interior */}
+                                            <div className="bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
+                                                <div className="p-4 flex items-center justify-between">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interior</p>
+                                                </div>
+                                                <div className="aspect-[4/3] bg-slate-100">
+                                                    {viewingRecord.images?.interior ? (
+                                                        <img
+                                                            src={viewingRecord.images.interior}
+                                                            className="w-full h-full object-cover"
+                                                            alt="Foto interior"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400">
+                                                            Sin imagen
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
                             <div className="grid grid-cols-2 gap-8">
                                 <div>
@@ -473,6 +596,90 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({ currentUserId, audit
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block leading-none">Dirección Completa</label><input className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm" value={editingRecord.client.address} onChange={e => setEditingRecord({ ...editingRecord, client: { ...editingRecord.client, address: e.target.value } })} /></div>
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase mb-2 block leading-none">Observaciones Auditoría</label><textarea className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm min-h-[100px]" value={editingRecord.client.observations} onChange={e => setEditingRecord({ ...editingRecord, client: { ...editingRecord.client, observations: e.target.value } })} /></div>
                                 </div>
+
+                                {/* EDITAR IMÁGENES */}
+                                <div className="space-y-4">
+                                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b pb-2 leading-none">
+                                        Evidencias Fotográficas
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Fachada */}
+                                        <div className="bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
+                                            <div className="p-4 flex items-center justify-between">
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fachada</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => facadeEditInputRef.current?.click()}
+                                                    className="px-4 py-2 rounded-2xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all"
+                                                >
+                                                    Reemplazar
+                                                </button>
+                                            </div>
+
+                                            <div className="aspect-[4/3] bg-slate-100">
+                                                {editingRecord.images?.facade ? (
+                                                    <img
+                                                        src={editingRecord.images.facade}
+                                                        className="w-full h-full object-cover"
+                                                        alt="Editar fachada"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400">
+                                                        Sin imagen
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <input
+                                                ref={facadeEditInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                className="hidden"
+                                                onChange={(e) => handleEditPhotoUpload(e, 'facade')}
+                                            />
+                                        </div>
+
+                                        {/* Interior */}
+                                        <div className="bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
+                                            <div className="p-4 flex items-center justify-between">
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interior</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => interiorEditInputRef.current?.click()}
+                                                    className="px-4 py-2 rounded-2xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all"
+                                                >
+                                                    Reemplazar
+                                                </button>
+                                            </div>
+
+                                            <div className="aspect-[4/3] bg-slate-100">
+                                                {editingRecord.images?.interior ? (
+                                                    <img
+                                                        src={editingRecord.images.interior}
+                                                        className="w-full h-full object-cover"
+                                                        alt="Editar interior"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400">
+                                                        Sin imagen
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <input
+                                                ref={interiorEditInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                className="hidden"
+                                                onChange={(e) => handleEditPhotoUpload(e, 'interior')}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </form>
 

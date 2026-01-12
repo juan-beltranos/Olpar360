@@ -105,7 +105,12 @@ const UserLocationMarker = () => {
 
 export const MapVisualizer: React.FC<MapProps> = ({ locations, center, onMarkerDragEnd, showUserLocation }) => {
   const defaultCenter: [number, number] = [4.6097, -74.0817]; // Bogota default
-  const activeCenter = center || (locations.length > 0 ? [locations[0].lat, locations[0].lng] : defaultCenter);
+  const activeCenter = useMemo<[number, number]>(() => {
+    if (center) return center;
+    if (locations.length > 0) return [locations[0].lat, locations[0].lng];
+    return defaultCenter;
+  }, [center, locations]);
+
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden shadow-inner border border-slate-700 relative z-0">
