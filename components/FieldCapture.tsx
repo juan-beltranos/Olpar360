@@ -642,6 +642,7 @@ export const FieldCapture: React.FC<{ auditorId?: string }> = ({ auditorId }) =>
                                         <input
                                             className="w-full bg-white border border-slate-200 rounded-xl p-3.5 font-bold outline-none"
                                             placeholder="3001234567"
+                                            type='number'
                                             value={formData.phone}
                                             onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
                                         />
